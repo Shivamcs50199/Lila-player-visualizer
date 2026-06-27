@@ -5,7 +5,7 @@ import type { MatchData } from '../../types/match'
 const MAP_ASSETS: Record<string, string> = {
   AmbroseValley: '/minimaps/AmbroseValley_Minimap.png',
   GrandRift:     '/minimaps/GrandRift_Minimap.png',
-  Lockdown:      '/minimaps/Lockdown_Minimap.jpg',
+  Lockdown:      '/minimaps/Lockdown_Minimap.png',
 }
 
 // ─── Map configs — exact values from README, do not modify ───────────────────
@@ -204,6 +204,113 @@ export default function MapCanvas({ selectedMap, matchData }: MapCanvasProps) {
     ctx.stroke()
     console.log('[CHECK 4] stroke() called for', movementRows.length, 'points')
   }, [matchData, mapRect])
+// ─── LAYER 2: Kill / death markers ─────────────────────────────────────────
+useEffect(() => {
+  const canvas = canvasRef.current
+  if (!canvas) return
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return
+  if (!matchData || mapRect.w === 0 || mapRect.h === 0) return
+
+  const combatRows = matchData.rows.filter(r =>
+    r.event === 'Kill'      ||
+    r.event === 'BotKill'   ||
+    r.event === 'Killed'    ||
+    r.event === 'BotKilled'
+  )
+
+  // Print every unique event type in the full file + its count
+const eventCounts = matchData.rows.reduce<Record<string, number>>((acc, r) => {
+  acc[r.event] = (acc[r.event] ?? 0) + 1
+  return acc
+}, {})
+console.log('[EVENT COUNTS]', eventCounts)
+console.log('[KILLS/DEATHS] combat rows:', combatRows.length, combatRows.map(r => r.event))
+
+  combatRows.forEach(row => {
+    const [cx, cy] = worldToCanvas(row.x, row.z, matchData.mapId)
+    const isKill   = row.event === 'Kill' || row.event === 'BotKill'
+
+    ctx.beginPath()
+    ctx.arc(cx, cy, 6, 0, Math.PI * 2)
+    ctx.fillStyle   = isKill ? '#f87171' : '#c084fc'
+    ctx.globalAlpha = 0.85
+    ctx.fill()
+
+    ctx.beginPath()
+    ctx.arc(cx, cy, 6, 0, Math.PI * 2)
+    ctx.strokeStyle = 'rgba(255,255,255,0.6)'
+    ctx.lineWidth   = 1.5
+    ctx.globalAlpha = 1
+    ctx.stroke()
+  })
+
+  ctx.globalAlpha = 1
+}, [matchData, mapRect])
+
+// ─── LAYER 3: Loot markers ──────────────────────────────────────────────────
+useEffect(() => {
+  const canvas = canvasRef.current
+  if (!canvas) return
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return
+  if (!matchData || mapRect.w === 0 || mapRect.h === 0) return
+
+  const lootRows = matchData.rows.filter(r => r.event === 'Loot')
+
+  console.log('[LOOT] rows found:', lootRows.length)
+
+  lootRows.forEach(row => {
+    const [cx, cy] = worldToCanvas(row.x, row.z, matchData.mapId)
+
+    ctx.beginPath()
+    ctx.arc(cx, cy, 5, 0, Math.PI * 2)
+    ctx.fillStyle   = '#facc15'
+    ctx.globalAlpha = 0.85
+    ctx.fill()
+
+    ctx.beginPath()
+    ctx.arc(cx, cy, 5, 0, Math.PI * 2)
+    ctx.strokeStyle = 'rgba(255,255,255,0.6)'
+    ctx.lineWidth   = 1.5
+    ctx.globalAlpha = 1
+    ctx.stroke()
+  })
+
+  ctx.globalAlpha = 1
+}, [matchData, mapRect])
+
+// ─── LAYER 4: Storm death markers ───────────────────────────────────────────
+useEffect(() => {
+  const canvas = canvasRef.current
+  if (!canvas) return
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return
+  if (!matchData || mapRect.w === 0 || mapRect.h === 0) return
+
+  const stormRows = matchData.rows.filter(r => r.event === 'KilledByStorm')
+
+  console.log('[STORM] rows found:', stormRows.length)
+
+  stormRows.forEach(row => {
+    const [cx, cy] = worldToCanvas(row.x, row.z, matchData.mapId)
+
+    ctx.beginPath()
+    ctx.arc(cx, cy, 6, 0, Math.PI * 2)
+    ctx.fillStyle   = '#34d399'
+    ctx.globalAlpha = 0.85
+    ctx.fill()
+
+    ctx.beginPath()
+    ctx.arc(cx, cy, 6, 0, Math.PI * 2)
+    ctx.strokeStyle = 'rgba(255,255,255,0.6)'
+    ctx.lineWidth   = 1.5
+    ctx.globalAlpha = 1
+    ctx.stroke()
+  })
+
+  ctx.globalAlpha = 1
+}, [matchData, mapRect])
 
   return (
     <div
