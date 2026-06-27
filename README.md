@@ -1,75 +1,87 @@
-# React + TypeScript + Vite
+# LILA Player Journey Visualizer
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+An interactive desktop visualization tool built for the **LILA Games Product Engineer Assignment**.
 
-Currently, two official plugins are available:
+The application enables Level Designers to visualize player movement, combat events, loot activity, and overall match progression using production gameplay telemetry rendered directly on the game minimap.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+---
 
-## React Compiler
+## 🚀 Tech Stack
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+* React
+* TypeScript
+* Vite
+* Tailwind CSS
+* HTML5 Canvas
+* Node.js
 
-## Expanding the ESLint configuration
+---
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+## 🛠 Development Tools
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+* Cursor
+* ChatGPT
+* Claude
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+---
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+## ✨ Current Features
 
+* Desktop-first application
+* Interactive minimap
+* Layer management sidebar
+* Inspector panel
+* Timeline panel
+* Responsive desktop layout
+* Coordinate mapping pipeline (Work in Progress)
+* Player journey visualization (Work in Progress)
+
+---
+
+## 📌 Planned Features
+
+* Player path rendering
+* Human vs Bot visualization
+* Kill, Death, Loot & Storm event markers
+* Timeline playback
+* Heatmap overlays
+* Map, Match & Date filtering
+* Pan & Zoom
+* Performance optimizations
+
+---
+
+## ⚙️ Getting Started
+
+```bash
+npm install
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+---
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## 📂 Project Structure
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-
+```text
+src/
+├── components/
+├── assets/
+├── hooks/
+├── utils/
+├── types/
+└── App.tsx
 ```
+
+---
+
+## 🚧 Project Status
+
+This project is currently under active development as part of the **LILA Games Product Engineer Interview Assignment**.
+
+Documentation, architecture notes, deployment, and gameplay insights will be added as development progresses.
+
+---
+
+## 📄 License
+
+This project was created solely for the LILA Games Product Engineer technical assessment.

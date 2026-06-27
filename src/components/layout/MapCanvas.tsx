@@ -175,10 +175,10 @@ export default function MapCanvas({ selectedMap }: MapCanvasProps) {
           width: '100%',
           height: '100%',
           filter: [
-            'drop-shadow(0px 0px 8px rgba(111, 232, 245, 0.55))',
-            'drop-shadow(0px 0px 20px rgba(111, 232, 245, 0.35))',
-            'drop-shadow(0px 0px 45px rgba(111, 232, 245, 0.18))',
-            'drop-shadow(0px 0px 80px rgba(111, 232, 245, 0.08))',
+            'drop-shadow(0px 0px 6px rgba(111, 232, 245, 0.55))',
+            'drop-shadow(0px 0px 25px rgba(111, 232, 245, 0.35))',
+            'drop-shadow(0px 0px 60px rgba(111, 232, 245, 0.18))',
+            'drop-shadow(0px 0px 120px rgba(111, 232, 245, 0.08))',
           ].join(' '),
         }}
       />
