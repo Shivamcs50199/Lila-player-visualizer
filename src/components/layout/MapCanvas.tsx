@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
+import type { MatchData } from '../../types/match'
 
 // ─── Map assets ───────────────────────────────────────────────────────────────
 const MAP_ASSETS: Record<string, string> = {
-  AmbroseValley: '/public/AmbroseValley_Minimap.png',
+  AmbroseValley: '/minimaps/AmbroseValley_Minimap.png',
   GrandRift:     '/minimaps/GrandRift_Minimap.png',
   Lockdown:      '/minimaps/Lockdown_Minimap.jpg',
 }
@@ -22,6 +23,7 @@ const MINIMAP_SIZE = 1024
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface MapCanvasProps {
   selectedMap: string
+  matchData: MatchData | null   // null until a file is loaded
 }
 
 // Tracks the exact pixel rect where the map image is drawn on the canvas.
@@ -33,7 +35,7 @@ interface MapRect {
   h: number  // height of drawn map image in canvas pixels
 }
 
-export default function MapCanvas({ selectedMap }: MapCanvasProps) {
+export default function MapCanvas({ selectedMap, matchData }: MapCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const canvasRef    = useRef<HTMLCanvasElement>(null)
   const [mapRect, setMapRect] = useState<MapRect>({ x: 0, y: 0, w: 0, h: 0 })
@@ -152,8 +154,56 @@ export default function MapCanvas({ selectedMap }: MapCanvasProps) {
     return minimapToCanvas(minimapPx, minimapPy)
   }
 
-  // Suppress unused warning until data layer is wired up
-  void worldToCanvas
+ // ─── MILESTONE: draw one player's movement path ──────────────────────────
+  // Built-in debug checkpoints — if the path doesn't show up, read the
+  // console in order. Stop at the FIRST [CHECK] that looks wrong; that's
+  // the broken step. Don't touch the pipeline above this point.
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
+
+    // CHECK 1 — is matchData arriving at all?
+    console.log('[CHECK 1] matchData:', matchData ? `${matchData.rows.length} rows, map=${matchData.mapId}` : 'null')
+    if (!matchData) return
+
+    if (mapRect.w === 0 || mapRect.h === 0) {
+      console.log('[CHECK 1b] mapRect not ready yet:', mapRect)
+      return
+    }
+
+    // CHECK 2 — are movement rows found after filtering?
+    const movementRows = matchData.rows
+      .filter(r => r.event === 'Position' || r.event === 'BotPosition')
+      .sort((a, b) => a.ts - b.ts)
+    console.log('[CHECK 2] movementRows found:', movementRows.length)
+    if (movementRows.length === 0) return
+
+    // CHECK 3 — does worldToCanvas() return valid (non-NaN) coordinates?
+    const firstPoint = worldToCanvas(movementRows[0].x, movementRows[0].z, matchData.mapId)
+    console.log('[CHECK 3] first world point', movementRows[0].x, movementRows[0].z, '→ canvas', firstPoint, '| mapRect:', mapRect)
+    if (Number.isNaN(firstPoint[0]) || Number.isNaN(firstPoint[1])) {
+      console.error('[CHECK 3 FAILED] worldToCanvas returned NaN')
+      return
+    }
+
+    // CHECK 4 — are the drawing commands actually executing?
+    ctx.beginPath()
+    ctx.strokeStyle = '#00FFFF'
+    ctx.lineWidth = 2
+
+    movementRows.forEach((row, i) => {
+      const [cx, cy] = worldToCanvas(row.x, row.z, matchData.mapId)
+      if (i === 0) ctx.moveTo(cx, cy)
+      else ctx.lineTo(cx, cy)
+    })
+
+    ctx.stroke()
+    console.log('[CHECK 4] stroke() called for', movementRows.length, 'points')
+  }, [matchData, mapRect])
 
   return (
     <div
