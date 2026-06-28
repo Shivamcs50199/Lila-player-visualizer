@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { MatchData } from '../../types/match'
+import type { LayerVisibility } from '../../App'
 
 // ─── Map assets ───────────────────────────────────────────────────────────────
 const MAP_ASSETS: Record<string, string> = {
@@ -23,7 +24,8 @@ const MINIMAP_SIZE = 1024
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface MapCanvasProps {
   selectedMap: string
-  matchData: MatchData | null   // null until a file is loaded
+  matchData:   MatchData | null
+  layers:      LayerVisibility
 }
 
 // Tracks the exact pixel rect where the map image is drawn on the canvas.
@@ -35,7 +37,7 @@ interface MapRect {
   h: number  // height of drawn map image in canvas pixels
 }
 
-export default function MapCanvas({ selectedMap, matchData }: MapCanvasProps) {
+export default function MapCanvas({ selectedMap, matchData, layers }: MapCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const canvasRef    = useRef<HTMLCanvasElement>(null)
   const [mapRect, setMapRect] = useState<MapRect>({ x: 0, y: 0, w: 0, h: 0 })
@@ -177,8 +179,11 @@ export default function MapCanvas({ selectedMap, matchData }: MapCanvasProps) {
 
     // CHECK 2 — are movement rows found after filtering?
     const movementRows = matchData.rows
-      .filter(r => r.event === 'Position' || r.event === 'BotPosition')
-      .sort((a, b) => a.ts - b.ts)
+  .filter(r =>
+    (r.event === 'Position'    && layers.humans) ||
+    (r.event === 'BotPosition' && layers.bots)
+  )
+  .sort((a, b) => a.ts - b.ts)
     console.log('[CHECK 2] movementRows found:', movementRows.length)
     if (movementRows.length === 0) return
 
@@ -203,7 +208,7 @@ export default function MapCanvas({ selectedMap, matchData }: MapCanvasProps) {
 
     ctx.stroke()
     console.log('[CHECK 4] stroke() called for', movementRows.length, 'points')
-  }, [matchData, mapRect])
+  }, [matchData, mapRect, layers])
 // ─── LAYER 2: Kill / death markers ─────────────────────────────────────────
 useEffect(() => {
   const canvas = canvasRef.current
@@ -212,6 +217,7 @@ useEffect(() => {
   if (!ctx) return
   if (!matchData || mapRect.w === 0 || mapRect.h === 0) return
 
+  if (!layers.kills && !layers.deaths) return
   const combatRows = matchData.rows.filter(r =>
     r.event === 'Kill'      ||
     r.event === 'BotKill'   ||
@@ -227,9 +233,11 @@ const eventCounts = matchData.rows.reduce<Record<string, number>>((acc, r) => {
 console.log('[EVENT COUNTS]', eventCounts)
 console.log('[KILLS/DEATHS] combat rows:', combatRows.length, combatRows.map(r => r.event))
 
-  combatRows.forEach(row => {
-    const [cx, cy] = worldToCanvas(row.x, row.z, matchData.mapId)
-    const isKill   = row.event === 'Kill' || row.event === 'BotKill'
+combatRows.forEach(row => {
+  const [cx, cy] = worldToCanvas(row.x, row.z, matchData.mapId)
+  const isKill   = row.event === 'Kill' || row.event === 'BotKill'
+  if (isKill  && !layers.kills)  return
+  if (!isKill && !layers.deaths) return
 
     ctx.beginPath()
     ctx.arc(cx, cy, 6, 0, Math.PI * 2)
@@ -246,7 +254,7 @@ console.log('[KILLS/DEATHS] combat rows:', combatRows.length, combatRows.map(r =
   })
 
   ctx.globalAlpha = 1
-}, [matchData, mapRect])
+}, [matchData, mapRect, layers])
 
 // ─── LAYER 3: Loot markers ──────────────────────────────────────────────────
 useEffect(() => {
@@ -256,6 +264,7 @@ useEffect(() => {
   if (!ctx) return
   if (!matchData || mapRect.w === 0 || mapRect.h === 0) return
 
+  if (!layers.loot) return
   const lootRows = matchData.rows.filter(r => r.event === 'Loot')
 
   console.log('[LOOT] rows found:', lootRows.length)
@@ -278,7 +287,7 @@ useEffect(() => {
   })
 
   ctx.globalAlpha = 1
-}, [matchData, mapRect])
+}, [matchData, mapRect, layers])
 
 // ─── LAYER 4: Storm death markers ───────────────────────────────────────────
 useEffect(() => {
@@ -287,6 +296,8 @@ useEffect(() => {
   const ctx = canvas.getContext('2d')
   if (!ctx) return
   if (!matchData || mapRect.w === 0 || mapRect.h === 0) return
+
+  if (!layers.storm) return
 
   const stormRows = matchData.rows.filter(r => r.event === 'KilledByStorm')
 
@@ -310,7 +321,7 @@ useEffect(() => {
   })
 
   ctx.globalAlpha = 1
-}, [matchData, mapRect])
+}, [matchData, mapRect, layers])
 
   return (
     <div
