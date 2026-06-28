@@ -35,6 +35,12 @@ export default function App() {
     setLayers(prev => ({ ...prev, [id]: !prev[id] }))
   }
 
+  const [currentTime, setCurrentTime] = useState<number | undefined>(undefined)
+
+  function handleTimeChange(t: number | ((prev: number | undefined) => number)) {
+    setCurrentTime(prev => typeof t === 'function' ? t(prev) : t)
+  }
+
   return (
     <div className="flex flex-col h-screen w-screen bg-[#0f1117] text-white overflow-hidden min-w-[1024px]">
       <TopToolbar />
@@ -52,6 +58,10 @@ export default function App() {
             console.log('First 3 rows:', data.rows.slice(0, 3))
             setMatchData(data)
             setSelectedMap(data.mapId)
+            const matchMinTs = Math.min(...data.rows.map(r => r.ts))
+            setCurrentTime(matchMinTs)
+            const minTs = Math.min(...data.rows.map(r => r.ts))
+            setCurrentTime(minTs)
           } catch (err) {
             console.error('[FAILED]', err)
           }
@@ -65,16 +75,21 @@ export default function App() {
           toggleLayer={toggleLayer}
         />
 
-        <MapCanvas
-          selectedMap={selectedMap}
-          matchData={matchData}
-          layers={layers}
-        />
+<MapCanvas
+  selectedMap={selectedMap}
+  matchData={matchData}
+  layers={layers}
+  currentTime={currentTime}
+/>
 
         <RightInspector />
       </div>
 
-      <BottomTimeline />
+      <BottomTimeline
+  matchData={matchData}
+  currentTime={currentTime}
+  onTimeChange={handleTimeChange}
+/>
     </div>
   )
 }

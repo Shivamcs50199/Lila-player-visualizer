@@ -23,9 +23,10 @@ const MINIMAP_SIZE = 1024
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface MapCanvasProps {
-  selectedMap: string
-  matchData:   MatchData | null
-  layers:      LayerVisibility
+  selectedMap:  string
+  matchData:    MatchData | null
+  layers:       LayerVisibility
+  currentTime?: number
 }
 
 // Tracks the exact pixel rect where the map image is drawn on the canvas.
@@ -37,7 +38,7 @@ interface MapRect {
   h: number  // height of drawn map image in canvas pixels
 }
 
-export default function MapCanvas({ selectedMap, matchData, layers }: MapCanvasProps) {
+export default function MapCanvas({ selectedMap, matchData, layers, currentTime }: MapCanvasProps) {
   const containerRef     = useRef<HTMLDivElement>(null)
   const canvasRef        = useRef<HTMLCanvasElement>(null)
   const heatmapCanvasRef = useRef<HTMLCanvasElement>(null)
@@ -179,6 +180,7 @@ export default function MapCanvas({ selectedMap, matchData, layers }: MapCanvasP
 
     // CHECK 1 — is matchData arriving at all?
     console.log('[CHECK 1] matchData:', matchData ? `${matchData.rows.length} rows, map=${matchData.mapId}` : 'null')
+    console.log('[CHECK 1c] currentTime:', currentTime, 'first ts:', matchData?.rows[0]?.ts)
     if (!matchData) return
 
     if (mapRect.w === 0 || mapRect.h === 0) {
@@ -188,10 +190,11 @@ export default function MapCanvas({ selectedMap, matchData, layers }: MapCanvasP
 
     // CHECK 2 — are movement rows found after filtering?
     const movementRows = matchData.rows
-  .filter(r =>
-    (r.event === 'Position'    && layers.humans) ||
-    (r.event === 'BotPosition' && layers.bots)
-  )
+    .filter(r =>
+      ((r.event === 'Position'    && layers.humans) ||
+       (r.event === 'BotPosition' && layers.bots)) &&
+      (currentTime === undefined || r.ts <= currentTime)
+    )
   .sort((a, b) => a.ts - b.ts)
     console.log('[CHECK 2] movementRows found:', movementRows.length)
     if (movementRows.length === 0) return
@@ -217,7 +220,7 @@ export default function MapCanvas({ selectedMap, matchData, layers }: MapCanvasP
 
     ctx.stroke()
     console.log('[CHECK 4] stroke() called for', movementRows.length, 'points')
-  }, [matchData, mapRect, layers])
+  }, [matchData, mapRect, layers, currentTime])
 
 // ─── LAYER 2: Kill / death markers ─────────────────────────────────────────
 useEffect(() => {
@@ -229,10 +232,11 @@ useEffect(() => {
 
   if (!layers.kills && !layers.deaths) return
   const combatRows = matchData.rows.filter(r =>
-    r.event === 'Kill'      ||
-    r.event === 'BotKill'   ||
-    r.event === 'Killed'    ||
-    r.event === 'BotKilled'
+    (r.event === 'Kill'      ||
+     r.event === 'BotKill'   ||
+     r.event === 'Killed'    ||
+     r.event === 'BotKilled') &&
+    (currentTime === undefined || r.ts <= currentTime)
   )
 
   // Print every unique event type in the full file + its count
@@ -264,7 +268,7 @@ combatRows.forEach(row => {
   })
 
   ctx.globalAlpha = 1
-}, [matchData, mapRect, layers])
+}, [matchData, mapRect, layers, currentTime])
 
 // ─── LAYER 3: Loot markers ──────────────────────────────────────────────────
 useEffect(() => {
@@ -275,7 +279,7 @@ useEffect(() => {
   if (!matchData || mapRect.w === 0 || mapRect.h === 0) return
 
   if (!layers.loot) return
-  const lootRows = matchData.rows.filter(r => r.event === 'Loot')
+  const lootRows = matchData.rows.filter(r => r.event === 'Loot' && (currentTime === undefined || r.ts <= currentTime))
 
   console.log('[LOOT] rows found:', lootRows.length)
 
@@ -297,7 +301,7 @@ useEffect(() => {
   })
 
   ctx.globalAlpha = 1
-}, [matchData, mapRect, layers])
+}, [matchData, mapRect, layers, currentTime])
 
 // ─── LAYER 4: Storm death markers ───────────────────────────────────────────
 useEffect(() => {
@@ -309,7 +313,10 @@ useEffect(() => {
 
   if (!layers.storm) return
 
-  const stormRows = matchData.rows.filter(r => r.event === 'KilledByStorm')
+  const stormRows = matchData.rows.filter(r =>
+    r.event === 'KilledByStorm' &&
+    (currentTime === undefined || r.ts <= currentTime)
+  )
 
   console.log('[STORM] rows found:', stormRows.length)
 
@@ -331,7 +338,7 @@ useEffect(() => {
   })
 
   ctx.globalAlpha = 1
-}, [matchData, mapRect, layers])
+}, [matchData, mapRect, layers, currentTime])
 
   // ─── LAYER 5: Heatmap overlay ───────────────────────────────────────────────
   // Renders on its OWN dedicated canvas (heatmapCanvasRef), stacked between
@@ -525,7 +532,7 @@ useEffect(() => {
     ctx.putImageData(imageData, 0, 0)
     ctx.restore()
   
-  }, [matchData, mapRect, layers])
+  }, [matchData, mapRect, layers, currentTime])
 
   return (
     <div
