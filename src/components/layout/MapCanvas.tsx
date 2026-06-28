@@ -38,8 +38,9 @@ interface MapRect {
 }
 
 export default function MapCanvas({ selectedMap, matchData, layers }: MapCanvasProps) {
-  const containerRef = useRef<HTMLDivElement>(null)
-  const canvasRef    = useRef<HTMLCanvasElement>(null)
+  const containerRef     = useRef<HTMLDivElement>(null)
+  const canvasRef        = useRef<HTMLCanvasElement>(null)
+  const heatmapCanvasRef = useRef<HTMLCanvasElement>(null)
   const [mapRect, setMapRect] = useState<MapRect>({ x: 0, y: 0, w: 0, h: 0 })
 
   const imageSrc = MAP_ASSETS[selectedMap] ?? MAP_ASSETS['AmbroseValley']
@@ -55,6 +56,14 @@ export default function MapCanvas({ selectedMap, matchData, layers }: MapCanvasP
     const { width: cw, height: ch } = container.getBoundingClientRect()
     canvas.width  = cw
     canvas.height = ch
+
+    // Heatmap gets its own same-sized canvas, kept independent of the
+    // event-marker canvas below.
+    const heatmapCanvas = heatmapCanvasRef.current
+    if (heatmapCanvas) {
+      heatmapCanvas.width  = cw
+      heatmapCanvas.height = ch
+    }
 
     const ctx = canvas.getContext('2d')
     if (!ctx) return
@@ -209,6 +218,7 @@ export default function MapCanvas({ selectedMap, matchData, layers }: MapCanvasP
     ctx.stroke()
     console.log('[CHECK 4] stroke() called for', movementRows.length, 'points')
   }, [matchData, mapRect, layers])
+
 // ─── LAYER 2: Kill / death markers ─────────────────────────────────────────
 useEffect(() => {
   const canvas = canvasRef.current
@@ -323,6 +333,200 @@ useEffect(() => {
   ctx.globalAlpha = 1
 }, [matchData, mapRect, layers])
 
+  // ─── LAYER 5: Heatmap overlay ───────────────────────────────────────────────
+  // Renders on its OWN dedicated canvas (heatmapCanvasRef), stacked between
+  // the map image and the event-marker canvas. It is cleared and redrawn
+  // here, but never touches canvasRef — so kills/deaths/loot/storm/path
+  // markers on that other canvas are never erased by this effect.
+  useEffect(() => {
+    const canvas = heatmapCanvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+
+    // Always clear this canvas first — if the layer is off, it just stays
+    // blank, and nothing else on the page is affected.
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
+
+    if (!matchData || mapRect.w === 0 || mapRect.h === 0) return
+    if (!layers.heatmap) return
+  
+    const positionRows = matchData.rows.filter(
+      r => r.event === 'Position' || r.event === 'BotPosition'
+    )
+    if (positionRows.length === 0) return
+  
+    const W = canvas.width
+    const H = canvas.height
+  
+    // ── Step 1: Accumulate raw density grid ──────────────────────────────────
+    const RADIUS = 14
+    const SIGMA  = RADIUS / 2.0
+    const density = new Float32Array(W * H)
+  
+    for (const row of positionRows) {
+      const [cx, cy] = worldToCanvas(row.x, row.z, matchData.mapId)
+      const x0 = Math.max(0, Math.floor(cx - RADIUS))
+      const x1 = Math.min(W - 1, Math.ceil(cx + RADIUS))
+      const y0 = Math.max(0, Math.floor(cy - RADIUS))
+      const y1 = Math.min(H - 1, Math.ceil(cy + RADIUS))
+      for (let py = y0; py <= y1; py++) {
+        for (let px = x0; px <= x1; px++) {
+          const dx = px - cx
+          const dy = py - cy
+          const d2 = dx * dx + dy * dy
+          if (d2 > RADIUS * RADIUS) continue
+          density[py * W + px] += Math.exp(-d2 / (2 * SIGMA * SIGMA))
+        }
+      }
+    }
+  
+    // ── Step 2: Gaussian blur the density field ───────────────────────────────
+    // Two-pass separable Gaussian blur (horizontal then vertical)
+    const BLUR_RADIUS = 12
+    const blurred = new Float32Array(W * H)
+    const temp    = new Float32Array(W * H)
+  
+    // Build 1D Gaussian kernel
+    const kernelSize = BLUR_RADIUS * 2 + 1
+    const kernel = new Float32Array(kernelSize)
+    let kernelSum = 0
+    for (let k = 0; k < kernelSize; k++) {
+      const x = k - BLUR_RADIUS
+      kernel[k] = Math.exp(-(x * x) / (2 * (BLUR_RADIUS / 2) * (BLUR_RADIUS / 2)))
+      kernelSum += kernel[k]
+    }
+    for (let k = 0; k < kernelSize; k++) kernel[k] /= kernelSum
+  
+    // Horizontal pass
+    for (let py = 0; py < H; py++) {
+      for (let px = 0; px < W; px++) {
+        let val = 0
+        for (let k = 0; k < kernelSize; k++) {
+          const sx = Math.min(W - 1, Math.max(0, px + k - BLUR_RADIUS))
+          val += density[py * W + sx] * kernel[k]
+        }
+        temp[py * W + px] = val
+      }
+    }
+  
+    // Vertical pass
+    for (let py = 0; py < H; py++) {
+      for (let px = 0; px < W; px++) {
+        let val = 0
+        for (let k = 0; k < kernelSize; k++) {
+          const sy = Math.min(H - 1, Math.max(0, py + k - BLUR_RADIUS))
+          val += temp[sy * W + px] * kernel[k]
+        }
+        blurred[py * W + px] = val
+      }
+    }
+  
+    // ── Step 3: Threshold — suppress weak density before colorizing ──────────
+    // Single tunable constant. Raise it to suppress more weak movement and
+    // keep only the strongest clusters; lower it to let fainter hotspots in.
+    const THRESHOLD_PERCENTILE = 0.91
+    const nonZero = Array.from(blurred).filter(v => v > 0).sort((a, b) => a - b)
+    const threshold = nonZero[Math.floor(nonZero.length * THRESHOLD_PERCENTILE)] ?? 0
+  
+    // ── Step 4: Normalize ─────────────────────────────────────────────────────
+    // Percentile-based "hottest" reference (instead of the single absolute
+    // max pixel) — otherwise only one pixel on the whole map could ever
+    // reach red/orange, and every other hotspot topped out blue.
+    const maxD = nonZero[Math.floor(nonZero.length * 0.995)] ?? 0
+    if (maxD === 0 || maxD <= threshold) return
+  
+    // ── Step 3.5: Drop any hotspot that never reaches the cyan/yellow stage ──
+    // A single pixel's value alone can't tell "edge of a real hotspot" apart
+    // from "entire peak of a weak one" — both look like deep blue. So we
+    // flood-fill each connected blob of above-threshold pixels, find its
+    // peak intensity, and only keep the blob if that peak clears the cyan
+    // ramp. Genuine hotspots keep their full gradient, including blue edges;
+    // weak ones are removed completely instead of drawing as a lone dot.
+    const CYAN_STAGE = 0.20 // must match the blue→cyan breakpoint below
+    const visited    = new Uint8Array(W * H)
+    const validPixel = new Uint8Array(W * H) // 1 = belongs to a real hotspot
+
+    for (let start = 0; start < W * H; start++) {
+      if (visited[start] || blurred[start] <= threshold) continue
+
+      const stack = [start]
+      const blobPixels = [start]
+      visited[start] = 1
+      let peakT = 0
+
+      while (stack.length > 0) {
+        const idx = stack.pop()!
+        const t = Math.min(1, (blurred[idx] - threshold) / (maxD - threshold))
+        if (t > peakT) peakT = t
+
+        const px = idx % W
+        const py = Math.floor(idx / W)
+        const neighbors = [
+          px > 0     ? idx - 1 : -1,
+          px < W - 1 ? idx + 1 : -1,
+          py > 0     ? idx - W : -1,
+          py < H - 1 ? idx + W : -1,
+        ]
+        for (const n of neighbors) {
+          if (n < 0 || visited[n] || blurred[n] <= threshold) continue
+          visited[n] = 1
+          stack.push(n)
+          blobPixels.push(n)
+        }
+      }
+
+      if (peakT >= CYAN_STAGE) {
+        for (const idx of blobPixels) validPixel[idx] = 1
+      }
+    }
+
+    // ── Step 5: Colorize density field ───────────────────────────────────────
+    // Color ramp: transparent → blue → cyan → yellow → orange → red
+    function densityToColor(t: number): [number, number, number, number] {
+      if (t <= 0)   return [0, 0, 0, 0]
+      if (t < 0.20) {
+        const s = t / 0.20
+        return [0, 0, 200, Math.round(s * 120)]
+      }
+      if (t < 0.40) {
+        const s = (t - 0.20) / 0.20
+        return [0, Math.round(s * 220), 255, Math.round(120 + s * 60)]
+      }
+      if (t < 0.60) {
+        const s = (t - 0.40) / 0.20
+        return [Math.round(s * 255), 255, Math.round(255 - s * 255), Math.round(180 + s * 40)]
+      }
+      if (t < 0.80) {
+        const s = (t - 0.60) / 0.20
+        return [255, Math.round(255 - s * 165), 0, Math.round(220 + s * 20)]
+      }
+      {
+        const s = (t - 0.80) / 0.20
+        return [255, Math.round(90 - s * 90), 0, 240]
+      }
+    }
+  
+    const imageData = ctx.createImageData(W, H)
+    const data = imageData.data
+  
+    for (let i = 0; i < blurred.length; i++) {
+      if (blurred[i] <= threshold || !validPixel[i]) continue
+      const t = Math.min(1, (blurred[i] - threshold) / (maxD - threshold))
+      const [r, g, b, a] = densityToColor(Math.pow(t, 0.7))
+      data[i * 4]     = r
+      data[i * 4 + 1] = g
+      data[i * 4 + 2] = b
+      data[i * 4 + 3] = a
+    }
+  
+    ctx.save()
+    ctx.globalAlpha = 0.90
+    ctx.putImageData(imageData, 0, 0)
+    ctx.restore()
+  
+  }, [matchData, mapRect, layers])
+
   return (
     <div
       ref={containerRef}
@@ -350,8 +554,14 @@ useEffect(() => {
           ].join(' '),
         }}
       />
+
+      {/* Heatmap — its own canvas, sits above the map, below event markers */}
+      <canvas
+        ref={heatmapCanvasRef}
+        className="absolute inset-0 w-full h-full pointer-events-none"
+      />
   
-      {/* Canvas sits on top — for event markers, paths, heatmap only */}
+      {/* Canvas sits on top — for event markers and the movement path */}
       {/* mapRect is still set via the useEffect for coordinate pipeline */}
       <canvas
         ref={canvasRef}
