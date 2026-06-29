@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { MatchData } from '../../types/match'
+import type { MatchData, MatchEvent } from '../../types/match'
 import type { LayerVisibility } from '../../App'
 
 // ─── Map assets ───────────────────────────────────────────────────────────────
@@ -22,11 +22,13 @@ const MAP_CONFIGS: Record<string, { scale: number; originX: number; originZ: num
 const MINIMAP_SIZE = 1024
 
 // ─── Types ────────────────────────────────────────────────────────────────────
+
 interface MapCanvasProps {
-  selectedMap:  string
-  matchData:    MatchData | null
-  layers:       LayerVisibility
-  currentTime?: number
+  selectedMap:    string
+  matchData:      MatchData | null
+  layers:         LayerVisibility
+  currentTime?:   number
+  onEventSelect?: (event: MatchEvent) => void
 }
 
 // Tracks the exact pixel rect where the map image is drawn on the canvas.
@@ -38,9 +40,10 @@ interface MapRect {
   h: number  // height of drawn map image in canvas pixels
 }
 
-export default function MapCanvas({ selectedMap, matchData, layers, currentTime }: MapCanvasProps) {
+export default function MapCanvas({ selectedMap, matchData, layers, currentTime, onEventSelect }: MapCanvasProps) {
   const containerRef     = useRef<HTMLDivElement>(null)
   const canvasRef        = useRef<HTMLCanvasElement>(null)
+const markersRef       = useRef<{ event: MatchEvent; cx: number; cy: number }[]>([])
   const heatmapCanvasRef = useRef<HTMLCanvasElement>(null)
   const [mapRect, setMapRect] = useState<MapRect>({ x: 0, y: 0, w: 0, h: 0 })
 
@@ -73,7 +76,8 @@ export default function MapCanvas({ selectedMap, matchData, layers, currentTime 
     img.src = imageSrc
 
     img.onload = () => {
-      ctx.clearRect(0, 0, cw, ch)
+      ctx.clearRect(0, 0, canvas.width, canvas.height)
+      
     
       const imgW  = img.naturalWidth
       const imgH  = img.naturalHeight
@@ -231,6 +235,7 @@ useEffect(() => {
   if (!matchData || mapRect.w === 0 || mapRect.h === 0) return
 
   if (!layers.kills && !layers.deaths) return
+  
   const combatRows = matchData.rows.filter(r =>
     (r.event === 'Kill'      ||
      r.event === 'BotKill'   ||
@@ -246,13 +251,15 @@ const eventCounts = matchData.rows.reduce<Record<string, number>>((acc, r) => {
 }, {})
 console.log('[EVENT COUNTS]', eventCounts)
 console.log('[KILLS/DEATHS] combat rows:', combatRows.length, combatRows.map(r => r.event))
-
+markersRef.current = []
+console.log('[MARKERS] mapRect at storage time:', mapRect)
 combatRows.forEach(row => {
   const [cx, cy] = worldToCanvas(row.x, row.z, matchData.mapId)
   const isKill   = row.event === 'Kill' || row.event === 'BotKill'
   if (isKill  && !layers.kills)  return
   if (!isKill && !layers.deaths) return
-
+  console.log('[STORE MARKER] event:', row.event, 'world x:', row.x, 'z:', row.z, '→ canvas cx:', cx, 'cy:', cy, '| mapRect:', mapRect)
+markersRef.current.push({ event: row, cx, cy })
     ctx.beginPath()
     ctx.arc(cx, cy, 6, 0, Math.PI * 2)
     ctx.fillStyle   = isKill ? '#f87171' : '#c084fc'
@@ -285,6 +292,7 @@ useEffect(() => {
 
   lootRows.forEach(row => {
     const [cx, cy] = worldToCanvas(row.x, row.z, matchData.mapId)
+    markersRef.current.push({ event: row, cx, cy })
 
     ctx.beginPath()
     ctx.arc(cx, cy, 5, 0, Math.PI * 2)
@@ -322,6 +330,7 @@ useEffect(() => {
 
   stormRows.forEach(row => {
     const [cx, cy] = worldToCanvas(row.x, row.z, matchData.mapId)
+    markersRef.current.push({ event: row, cx, cy })
 
     ctx.beginPath()
     ctx.arc(cx, cy, 6, 0, Math.PI * 2)
@@ -538,9 +547,30 @@ useEffect(() => {
     <div
       ref={containerRef}
       className="flex-1 relative overflow-hidden"
-      style={{ background: '#0A0C10' }}
+      style={{ background: '#0A0C10', cursor: 'crosshair' }}
+      onClick={(e) => {
+        const _canvas = canvasRef.current!
+        const _canvasRect = _canvas.getBoundingClientRect()
+        const _containerRect = containerRef.current!.getBoundingClientRect()
+        console.log('[MEASURE] canvas internal:', _canvas.width, 'x', _canvas.height)
+        console.log('[MEASURE] canvas CSS rect:', _canvasRect.width, 'x', _canvasRect.height)
+        console.log('[MEASURE] container rect:', _containerRect.width, 'x', _containerRect.height)
+        console.log('[MEASURE] first marker cx/cy:', markersRef.current[0]?.cx, markersRef.current[0]?.cy)
+        console.log('[MEASURE] click clientX/Y:', e.clientX, e.clientY)
+        console.log('[CLICK] mapRect at click time:', mapRect)
+        const rect = canvasRef.current!.getBoundingClientRect()
+        const mx = e.clientX - rect.left
+        const my = e.clientY - rect.top
+        console.log('[CLICK] markers stored:', markersRef.current.length, 'at', mx, my)
+          const hit = markersRef.current.find(m => {
+          const dx = m.cx - mx
+          const dy = m.cy - my
+          return Math.sqrt(dx * dx + dy * dy) <= 10
+        })
+        if (hit && onEventSelect) onEventSelect(hit.event)
+      }}
     >
-      {/* Map image — CSS drop-shadow follows the PNG silhouette exactly */}
+      {/* Map image */}
       <img
         src={imageSrc}
         alt={selectedMap}
@@ -562,19 +592,18 @@ useEffect(() => {
         }}
       />
 
-      {/* Heatmap — its own canvas, sits above the map, below event markers */}
+      {/* Heatmap canvas — sits above map, below event markers */}
       <canvas
         ref={heatmapCanvasRef}
         className="absolute inset-0 w-full h-full pointer-events-none"
       />
-  
-      {/* Canvas sits on top — for event markers and the movement path */}
-      {/* mapRect is still set via the useEffect for coordinate pipeline */}
+
+      {/* Event markers canvas — paths, kills, deaths, loot, storm */}
       <canvas
         ref={canvasRef}
         className="absolute inset-0 w-full h-full pointer-events-none"
       />
-  
+
       {/* Map name badge */}
       <div className="absolute bottom-4 left-4 text-white/30 text-[11px] tracking-widest font-medium select-none pointer-events-none">
         {selectedMap.toUpperCase()}

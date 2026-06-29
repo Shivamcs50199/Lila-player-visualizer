@@ -4,7 +4,7 @@ import LeftSidebar from './components/layout/LeftSidebar'
 import RightInspector from './components/layout/RightInspector'
 import BottomTimeline from './components/layout/BottomTimeline'
 import MapCanvas from './components/layout/MapCanvas'
-import type { MatchData } from './types/match'
+import type { MatchData, MatchEvent } from './types/match'
 
 export type LayerVisibility = {
   humans:    boolean
@@ -18,9 +18,11 @@ export type LayerVisibility = {
 }
 
 export default function App() {
-  const [selectedMap, setSelectedMap] = useState('AmbroseValley')
-  const [matchData, setMatchData]     = useState<MatchData | null>(null)
-  const [layers, setLayers]           = useState<LayerVisibility>({
+  const [selectedMap, setSelectedMap]     = useState('AmbroseValley')
+  const [matchData, setMatchData]         = useState<MatchData | null>(null)
+  const [selectedEvent, setSelectedEvent] = useState<MatchEvent | null>(null)
+  const [currentTime, setCurrentTime]     = useState<number | undefined>(undefined)
+  const [layers, setLayers]               = useState<LayerVisibility>({
     humans:   true,
     bots:     true,
     kills:    true,
@@ -35,8 +37,6 @@ export default function App() {
     setLayers(prev => ({ ...prev, [id]: !prev[id] }))
   }
 
-  const [currentTime, setCurrentTime] = useState<number | undefined>(undefined)
-
   function handleTimeChange(t: number | ((prev: number | undefined) => number)) {
     setCurrentTime(prev => typeof t === 'function' ? t(prev) : t)
   }
@@ -48,20 +48,17 @@ export default function App() {
         type="file"
         onChange={async (e) => {
           const file = e.target.files?.[0]
-          console.log('[STEP 1] input fired, file:', file?.name, file?.size, 'bytes')
           if (!file) return
           try {
             const { parseMatchFile } = await import('./lib/parseMatchFile')
-            console.log('[STEP 2] parseMatchFile() reached, calling it now')
             const data = await parseMatchFile(file)
-            console.log('[DONE] rows:', data.rows.length, 'map:', data.mapId, 'match:', data.matchId)
-            console.log('First 3 rows:', data.rows.slice(0, 3))
             setMatchData(data)
             setSelectedMap(data.mapId)
-            const matchMinTs = Math.min(...data.rows.map(r => r.ts))
-            setCurrentTime(matchMinTs)
             const minTs = Math.min(...data.rows.map(r => r.ts))
             setCurrentTime(minTs)
+            // TEMP: auto-select first kill to verify Inspector works
+            const firstKill = data.rows.find(r => r.event === 'Kill' || r.event === 'BotKill')
+            if (firstKill) setSelectedEvent(firstKill)
           } catch (err) {
             console.error('[FAILED]', err)
           }
@@ -75,21 +72,22 @@ export default function App() {
           toggleLayer={toggleLayer}
         />
 
-<MapCanvas
-  selectedMap={selectedMap}
-  matchData={matchData}
-  layers={layers}
-  currentTime={currentTime}
-/>
+        <MapCanvas
+          selectedMap={selectedMap}
+          matchData={matchData}
+          layers={layers}
+          currentTime={currentTime}
+          onEventSelect={setSelectedEvent}
+        />
 
-        <RightInspector />
+        <RightInspector selectedEvent={selectedEvent} />
       </div>
 
       <BottomTimeline
-  matchData={matchData}
-  currentTime={currentTime}
-  onTimeChange={handleTimeChange}
-/>
+        matchData={matchData}
+        currentTime={currentTime}
+        onTimeChange={handleTimeChange}
+      />
     </div>
   )
 }
