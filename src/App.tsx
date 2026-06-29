@@ -41,29 +41,67 @@ export default function App() {
     setCurrentTime(prev => typeof t === 'function' ? t(prev) : t)
   }
 
+  async function handleLoadMatch(files: FileList) {
+    try {
+      const { parseMatchFile } = await import('./lib/parseMatchFile')
+
+      // Parse in batches instead of all at once. parseMatchFile.ts now
+      // reuses one shared DuckDB engine instead of spinning up a new one
+      // per file — but even with one engine, firing off hundreds of
+      // concurrent queries in a single Promise.all still overloads memory.
+      // Batching keeps the number of files being parsed at once bounded.
+      const BATCH_SIZE = 40
+      const fileArray = Array.from(files)
+      const allResults: MatchData[] = []
+
+      for (let i = 0; i < fileArray.length; i += BATCH_SIZE) {
+        const batch = fileArray.slice(i, i + BATCH_SIZE)
+        const batchResults = await Promise.all(batch.map(f => parseMatchFile(f)))
+        allResults.push(...batchResults)
+        console.log(`[LOAD MATCH] parsed ${Math.min(i + BATCH_SIZE, fileArray.length)} / ${fileArray.length} files`)
+      }
+
+      const matchGroups: Record<string, typeof allResults[0]['rows']> = {}
+      for (const result of allResults) {
+        if (!matchGroups[result.matchId]) matchGroups[result.matchId] = []
+        matchGroups[result.matchId].push(...result.rows)
+      }
+
+      const sortedGroups = Object.entries(matchGroups).sort((a, b) => b[1].length - a[1].length)
+      const bestMatchId = sortedGroups[0][0]
+      const combinedRows = matchGroups[bestMatchId].sort((a, b) => a.ts - b.ts)
+      const mapId = combinedRows[0]?.map_id ?? 'AmbroseValley'
+      const combined = {
+        rows:     combinedRows,
+        mapId,
+        matchId:  bestMatchId,
+        duration: Math.max(...combinedRows.map(r => r.ts)),
+      }
+      setMatchData(combined)
+      setSelectedMap(mapId)
+      setCurrentTime(Math.min(...combinedRows.map(r => r.ts)))
+      setSelectedEvent(null)
+      console.log(
+        '[LOAD MATCH]', files.length, 'files →', combinedRows.length, 'rows,',
+        'matchId:', bestMatchId,
+        '(', sortedGroups.length, 'distinct match_id(s) found across selected files)'
+      )
+    } catch (err) {
+      console.error('[LOAD MATCH FAILED]', err)
+    }
+  }
+
   return (
     <div className="flex flex-col h-screen w-screen bg-[#0f1117] text-white overflow-hidden min-w-[1024px]">
-      <TopToolbar />
-      <input
-        type="file"
-        onChange={async (e) => {
-          const file = e.target.files?.[0]
-          if (!file) return
-          try {
-            const { parseMatchFile } = await import('./lib/parseMatchFile')
-            const data = await parseMatchFile(file)
-            setMatchData(data)
-            setSelectedMap(data.mapId)
-            const minTs = Math.min(...data.rows.map(r => r.ts))
-            setCurrentTime(minTs)
-            // TEMP: auto-select first kill to verify Inspector works
-            const firstKill = data.rows.find(r => r.event === 'Kill' || r.event === 'BotKill')
-            if (firstKill) setSelectedEvent(firstKill)
-          } catch (err) {
-            console.error('[FAILED]', err)
-          }
-        }}
-      />
+     <TopToolbar
+  onLoadMatch={handleLoadMatch}
+  matchInfo={matchData ? {
+    map:   matchData.mapId,
+    match: '#' + matchData.matchId.slice(0, 5),
+    date:  new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+  } : undefined}
+/>
+      
 
       <div className="flex flex-1 overflow-hidden">
         <LeftSidebar

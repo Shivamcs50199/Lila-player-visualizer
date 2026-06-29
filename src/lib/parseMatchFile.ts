@@ -3,22 +3,47 @@ import duckdb_wasm from '@duckdb/duckdb-wasm/dist/duckdb-mvp.wasm?url'
 import mvp_worker from '@duckdb/duckdb-wasm/dist/duckdb-browser-mvp.worker.js?url'
 import type { MatchEvent, MatchData } from '../types/match'
 
-export async function parseMatchFile(file: File): Promise<MatchData> {
-  const worker = new Worker(mvp_worker)
-  const logger = new duckdb.ConsoleLogger()
-  const db = new duckdb.AsyncDuckDB(logger, worker)
+// ─── Shared DuckDB engine ───────────────────────────────────────────────────
+// Previously, every call to parseMatchFile() created a brand-new Worker +
+// WASM instance from scratch. Fine for one file — but loading hundreds of
+// files for LOAD MATCH meant hundreds of Workers + WASM modules all starting
+// up at once. That's what froze the browser, not just the data volume.
+//
+// Now the engine is created once, lazily, on the first call. Every later
+// call — even for a completely different file — reuses that same instance.
+let dbInstance: duckdb.AsyncDuckDB | null = null
+let dbInitPromise: Promise<duckdb.AsyncDuckDB> | null = null
 
-  await db.instantiate(duckdb_wasm)
-  console.log('[STEP 3] duckdb instantiated')
+async function getDB(): Promise<duckdb.AsyncDuckDB> {
+  if (dbInstance) return dbInstance
+  if (!dbInitPromise) {
+    dbInitPromise = (async () => {
+      const worker = new Worker(mvp_worker)
+      const logger = new duckdb.ConsoleLogger()
+      const db = new duckdb.AsyncDuckDB(logger, worker)
+      await db.instantiate(duckdb_wasm)
+      dbInstance = db
+      return db
+    })()
+  }
+  return dbInitPromise
+}
+
+// Each file gets registered under its own unique name. With one shared
+// engine, several files can be mid-parse at the same time (within a LOAD
+// MATCH batch) — without unique names they'd all collide trying to use the
+// same "match.parquet" handle at once.
+let fileCounter = 0
+
+export async function parseMatchFile(file: File): Promise<MatchData> {
+  const db = await getDB()
+  const registeredName = `match_${fileCounter++}.parquet`
 
   const conn = await db.connect()
-  console.log('[STEP 3] connected to duckdb')
 
-  await db.registerFileHandle('match.parquet', file, duckdb.DuckDBDataProtocol.BROWSER_FILEREADER, true)
-  console.log('[STEP 4] file registered with duckdb')
+  await db.registerFileHandle(registeredName, file, duckdb.DuckDBDataProtocol.BROWSER_FILEREADER, true)
 
-  const result = await conn.query('SELECT * FROM parquet_scan("match.parquet")')
-  console.log('[STEP 4] query returned', result.numRows, 'rows')
+  const result = await conn.query(`SELECT * FROM parquet_scan("${registeredName}")`)
 
   const rows: MatchEvent[] = result.toArray().map((row: any) => {
     const rawEvent = row['event']
@@ -43,8 +68,13 @@ export async function parseMatchFile(file: File): Promise<MatchData> {
 
   await conn.close()
 
-  console.log('Total rows:', rows.length)
-  console.log('First 3:', rows.slice(0, 3))
+  // Free the file from DuckDB's registry now that we're done reading it.
+  // Matters a lot when loading hundreds of files in one LOAD MATCH session.
+  try {
+    await db.dropFile(registeredName)
+  } catch {
+    // best-effort cleanup only — not worth failing the whole parse over
+  }
 
   const mapId = rows[0]?.map_id ?? 'AmbroseValley'
   const matchId = rows[0]?.match_id ?? ''
