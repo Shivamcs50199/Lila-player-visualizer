@@ -59,11 +59,21 @@ export default function TopToolbar({ onLoadMatch, matchInfo }: TopToolbarProps) 
       <input
         ref={fileInputRef}
         type="file"
+        {...{ webkitdirectory: '' }}
         multiple
         className="hidden"
         onChange={(e) => {
+          // ── STAGE 1: did onChange fire? ──────────────────────────────────
+          console.log('[STAGE 1] input onChange fired')
+          console.log('[STAGE 1] e.target.files:', e.target.files)
+          console.log('[STAGE 1] files.length:', e.target.files?.length ?? 'null')
+
           if (e.target.files && e.target.files.length > 0) {
+            // ── STAGE 2: is onLoadMatch about to be called? ───────────────
+            console.log('[STAGE 2] calling onLoadMatch with', e.target.files.length, 'files')
             onLoadMatch(e.target.files)
+          } else {
+            console.warn('[STAGE 1] files were null or empty — onLoadMatch NOT called')
           }
         }}
       />
