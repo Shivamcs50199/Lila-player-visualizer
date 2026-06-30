@@ -37,7 +37,7 @@ export default function LeftSidebar({ matchData, layers, toggleLayer }: LeftSide
       title: 'MOVEMENT',
       items: [
         { id: 'humans',   label: 'Humans',       count: counts.humans,  color: '#60a5fa', disabled: false },
-        { id: 'bots',     label: 'Bots',         count: counts.bots,    color: '#fb923c', disabled: false },
+        { id: 'bots',     label: 'Bots',         count: counts.bots,    color: '#32CD32', disabled: false },
       ],
     },
     {

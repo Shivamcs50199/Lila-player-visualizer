@@ -212,18 +212,38 @@ const markersRef       = useRef<{ event: MatchEvent; cx: number; cy: number }[]>
     }
 
     // CHECK 4 — are the drawing commands actually executing?
-    ctx.beginPath()
-    ctx.strokeStyle = '#00FFFF'
-    ctx.lineWidth = 2
+   // CHECK 4 — are the drawing commands actually executing?
+    // Humans (Position) draw in cyan, Bots (BotPosition) draw in lime green —
+    // same points, same order, just split into two strokes so the colors
+    // don't mix. Coordinate conversion and filtering above are unchanged.
+    const humanRows = movementRows.filter(r => r.event === 'Position')
+    const botRows   = movementRows.filter(r => r.event === 'BotPosition')
 
-    movementRows.forEach((row, i) => {
-      const [cx, cy] = worldToCanvas(row.x, row.z, matchData.mapId)
-      if (i === 0) ctx.moveTo(cx, cy)
-      else ctx.lineTo(cx, cy)
-    })
+    console.log(
+      '[DIAGNOSTIC]',
+      'Human rows:', humanRows.length,
+      'Human players:', new Set(humanRows.map(r => r.user_id)).size,
+      '| Bot rows:', botRows.length,
+      'Bot players:', new Set(botRows.map(r => r.user_id)).size
+    )
 
-    ctx.stroke()
-    console.log('[CHECK 4] stroke() called for', movementRows.length, 'points')
+    function strokePath(rows: typeof movementRows, color: string) {
+      if (rows.length === 0) return
+      ctx.beginPath()
+      ctx.strokeStyle = color
+      ctx.lineWidth = 2
+      rows.forEach((row, i) => {
+        const [cx, cy] = worldToCanvas(row.x, row.z, matchData.mapId)
+        if (i === 0) ctx.moveTo(cx, cy)
+        else ctx.lineTo(cx, cy)
+      })
+      ctx.stroke()
+    }
+
+    strokePath(humanRows, '#00FFFF') // Humans — unchanged cyan
+    strokePath(botRows, '#32CD32')   // Bots — lime green
+
+    console.log('[CHECK 4] stroke() called for', movementRows.length, 'points (', humanRows.length, 'human,', botRows.length, 'bot )')
   }, [matchData, mapRect, layers, currentTime])
 
 // ─── LAYER 2: Kill / death markers ─────────────────────────────────────────

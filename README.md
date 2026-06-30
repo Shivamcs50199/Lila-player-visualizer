@@ -1,60 +1,51 @@
 # LILA Player Journey Visualizer
 
-An interactive desktop visualization tool built for the **LILA Games Product Engineer Assignment**.
+An interactive desktop visualization tool built as part of the **LILA Games Product Engineer Assignment**.
 
-The application enables Level Designers to visualize player movement, combat events, loot activity, and overall match progression using production gameplay telemetry rendered directly on the game minimap.
+The application visualizes gameplay telemetry from match files, allowing level designers and developers to inspect player movement, combat events, loot activity, and match progression directly on the game minimap.
 
 ---
 
 ## 🚀 Tech Stack
 
-* React
-* TypeScript
-* Vite
-* Tailwind CSS
-* HTML5 Canvas
-* Node.js
+- React
+- TypeScript
+- Vite
+- Tailwind CSS
+- HTML5 Canvas
+- DuckDB WASM
 
 ---
 
-## 🛠 Development Tools
+## ✨ Features
 
-* Cursor
-* ChatGPT
-* Claude
-
----
-
-## ✨ Current Features
-
-* Desktop-first application
-* Interactive minimap
-* Layer management sidebar
-* Inspector panel
-* Timeline panel
-* Responsive desktop layout
-* Coordinate mapping pipeline (Work in Progress)
-* Player journey visualization (Work in Progress)
-
----
-
-## 📌 Planned Features
-
-* Player path rendering
-* Human vs Bot visualization
-* Kill, Death, Loot & Storm event markers
-* Timeline playback
-* Heatmap overlays
-* Map, Match & Date filtering
-* Pan & Zoom
-* Performance optimizations
+- Desktop-first replay experience
+- Full match loading from gameplay telemetry
+- Automatic match reconstruction from multiple player files
+- Match Picker for selecting reconstructed matches
+- Interactive minimap visualization
+- Human and Bot movement layers
+- Kill, Death, Loot and Storm event markers
+- Timeline playback with scrubbing
+- Event Inspector with detailed event information
+- Layer visibility controls
+- Heatmap visualization
+- Progress overlay while loading large datasets
+- Batched file parsing for improved performance
 
 ---
 
 ## ⚙️ Getting Started
 
+Install dependencies:
+
 ```bash
 npm install
+```
+
+Start the development server:
+
+```bash
 npm run dev
 ```
 
@@ -64,11 +55,15 @@ npm run dev
 
 ```text
 src/
-├── components/
 ├── assets/
-├── hooks/
-├── utils/
+├── components/
+│   ├── layout/
+│   ├── map/
+│   ├── replay/
+│   └── timeline/
+├── lib/
 ├── types/
+├── utils/
 └── App.tsx
 ```
 
@@ -76,12 +71,19 @@ src/
 
 ## 🚧 Project Status
 
-This project is currently under active development as part of the **LILA Games Product Engineer Interview Assignment**.
+The core requirements of the assignment have been completed.
 
-Documentation, architecture notes, deployment, and gameplay insights will be added as development progresses.
+The project currently supports loading complete matches, replaying player journeys, visualizing gameplay events, and inspecting match data through an interactive desktop interface.
+
+Potential future improvements include:
+
+- Map pan & zoom
+- Player-specific path filtering
+- Additional replay controls
+- Performance optimizations for larger datasets
 
 ---
 
 ## 📄 License
 
-This project was created solely for the LILA Games Product Engineer technical assessment.
+Created for the **LILA Games Product Engineer Technical Assignment**.
