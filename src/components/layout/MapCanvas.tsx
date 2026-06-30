@@ -227,17 +227,24 @@ const markersRef       = useRef<{ event: MatchEvent; cx: number; cy: number }[]>
       'Bot players:', new Set(botRows.map(r => r.user_id)).size
     )
 
+    // Re-capture as new constants so TypeScript's null-narrowing carries
+    // into the nested strokePath function below (narrowing from the
+    // earlier `if (!ctx) return` / `if (!matchData) return` checks does
+    // not propagate into nested function bodies).
+    const safeCtx = ctx
+    const mapId = matchData.mapId
+
     function strokePath(rows: typeof movementRows, color: string) {
       if (rows.length === 0) return
-      ctx.beginPath()
-      ctx.strokeStyle = color
-      ctx.lineWidth = 2
+      safeCtx.beginPath()
+      safeCtx.strokeStyle = color
+      safeCtx.lineWidth = 2
       rows.forEach((row, i) => {
-        const [cx, cy] = worldToCanvas(row.x, row.z, matchData.mapId)
-        if (i === 0) ctx.moveTo(cx, cy)
-        else ctx.lineTo(cx, cy)
+        const [cx, cy] = worldToCanvas(row.x, row.z, mapId)
+        if (i === 0) safeCtx.moveTo(cx, cy)
+        else safeCtx.lineTo(cx, cy)
       })
-      ctx.stroke()
+      safeCtx.stroke()
     }
 
     strokePath(humanRows, '#00FFFF') // Humans — unchanged cyan
