@@ -87,3 +87,11 @@ Potential future improvements include:
 ## 📄 License
 
 Created for the **LILA Games Product Engineer Technical Assignment**.
+
+## Live Demo
+
+https://lila-player-visualizer-z1gh.vercel.app
+
+## 🎥 Demo Video
+
+https://youtu.be/uKyNtsPBx4w
