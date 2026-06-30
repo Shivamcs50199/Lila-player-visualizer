@@ -181,7 +181,7 @@ export default function App() {
 
   // ─── Render ──────────────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col h-screen w-screen bg-[#0f1117] text-white overflow-hidden min-w-[1024px]">
+    <div className="flex flex-col h-full w-full bg-[#0f1117] text-white overflow-hidden min-w-[1024px]">
       <TopToolbar
         onLoadMatch={handleLoadMatch}
         matchInfo={matchData ? {

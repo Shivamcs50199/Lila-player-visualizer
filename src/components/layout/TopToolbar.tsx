@@ -13,7 +13,7 @@ export default function TopToolbar({ onLoadMatch, matchInfo }: TopToolbarProps) 
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   return (
-    <div className="h-18 border-b border-white/10 flex items-center px-8 gap-10 flex-shrink-0 bg-[#0f1117]">
+    <div className="h-[72px] border-b border-white/10 flex items-center px-8 gap-10 flex-shrink-0 bg-[#0f1117] flex-nowrap whitespace-nowrap overflow-hidden">
 
       {/* Logo */}
       <div className="flex items-center gap-8 ml-3">
@@ -28,7 +28,7 @@ export default function TopToolbar({ onLoadMatch, matchInfo }: TopToolbarProps) 
       <div className="w-px h-7 bg-white/10" />
 
       {/* Title */}
-      <div className="text-white/70 text-[13px] font-medium tracking-[0.15em] uppercase">
+      <div className="text-white/70 text-[13px] font-medium tracking-[0.15em] uppercase whitespace-nowrap flex-shrink-0">
         Player Journey Visualization Tool
       </div>
 
@@ -42,10 +42,10 @@ export default function TopToolbar({ onLoadMatch, matchInfo }: TopToolbarProps) 
           { label: 'DATE',  value: matchInfo?.date   ?? 'May 20, 2024' },
           { label: 'MODE',  value: 'All Modes' },
         ].map((item) => (
-          <div key={item.label} className="flex flex-col gap-1 cursor-pointer group">
+          <div key={item.label} className="flex flex-col gap-1 cursor-pointer group flex-shrink-0">
             <span className="text-[11px] text-white/40 tracking-[0.12em] font-semibold uppercase">{item.label}</span>
             <div className="flex items-center gap-1.5">
-              <span className="text-white/90 text-[15px] font-medium group-hover:text-white transition-colors">{item.value}</span>
+            <span className="text-white/90 text-[15px] font-medium group-hover:text-white transition-colors whitespace-nowrap">{item.value}</span>
               <span className="text-white/30 text-[11px]">▾</span>
             </div>
           </div>
